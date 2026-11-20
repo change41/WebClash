@@ -1,0 +1,209 @@
+package service
+
+import (
+	"strconv"
+	"strings"
+)
+
+// RenderSystemdUnit ports renderSystemdUnit byte-for-byte.
+func RenderSystemdUnit(o ServiceOptions) string {
+	r := strings.NewReplacer(
+		"{{BIN}}", o.Bin,
+		"{{ENV}}", EnvPath(o),
+		"{{DATA}}", o.DataDir,
+		"{{USER}}", o.User,
+		"{{CAPS}}", capabilities(o),
+	)
+	return r.Replace(`[Unit]
+Description=WebClash (mihomo web panel)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart={{BIN}} run
+EnvironmentFile=-{{ENV}}
+WorkingDirectory={{DATA}}
+User={{USER}}
+Group={{USER}}
+UMask=0077
+Restart=on-failure
+RestartSec=3s
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStartSec=90
+TimeoutStopSec=30
+LimitNOFILE=65535
+CapabilityBoundingSet={{CAPS}}
+AmbientCapabilities={{CAPS}}
+DeviceAllow=/dev/net/tun rw
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths={{DATA}}
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
+`)
+}
+
+// EnvKV is one ordered environment entry. ParseEnvFile returns these in file
+// order (duplicate keys keep their first position, last value) so that the
+// render merge replicates JS object-spread insertion order exactly.
+type EnvKV struct {
+	Key   string
+	Value string
+}
+
+// ParseEnvFile ports parseEnvFile. The Node version returns an object whose
+// Object.entries order is insertion order; we preserve that with a slice.
+func ParseEnvFile(text string) []EnvKV {
+	var order []string
+	vals := map[string]string{}
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		value := strings.TrimSpace(line[eq+1:])
+		if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
+			(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
+			if len(value) >= 2 {
+				value = value[1 : len(value)-1]
+			} else {
+				value = ""
+			}
+		}
+		if _, ok := vals[key]; !ok {
+			order = append(order, key)
+		}
+		vals[key] = value
+	}
+	out := make([]EnvKV, 0, len(order))
+	for _, k := range order {
+		out = append(out, EnvKV{Key: k, Value: vals[k]})
+	}
+	return out
+}
+
+// orderedEnv merges existing entries with overrides while preserving the JS
+// spread semantics: existing keys keep their position (value updated in place),
+// new keys are appended in override order.
+type orderedEnv struct {
+	keys []string
+	vals map[string]string
+}
+
+func newOrderedEnv(existing []EnvKV) *orderedEnv {
+	m := &orderedEnv{vals: map[string]string{}}
+	for _, kv := range existing {
+		m.set(kv.Key, kv.Value)
+	}
+	return m
+}
+
+func (m *orderedEnv) set(key, value string) {
+	if _, ok := m.vals[key]; !ok {
+		m.keys = append(m.keys, key)
+	}
+	m.vals[key] = value
+}
+
+func (m *orderedEnv) list() []EnvKV {
+	out := make([]EnvKV, 0, len(m.keys))
+	for _, k := range m.keys {
+		out = append(out, EnvKV{Key: k, Value: m.vals[k]})
+	}
+	return out
+}
+
+// RenderEnvFile ports renderEnvFile byte-for-byte.
+func RenderEnvFile(o ServiceOptions, existing []EnvKV) string {
+	merged := newOrderedEnv(existing)
+	merged.set("DATA_DIR", o.DataDir)
+	merged.set("WEBUI_HOST", o.Host)
+	merged.set("WEBUI_PORT", strconv.Itoa(o.Port))
+	merged.set("NODE_ENV", "production")
+	lines := []string{
+		"# WebClash 服务环境变量（由 webclash install 生成，可手动编辑）",
+		"# 优先级高于 settings.json；修改后执行 systemctl restart " + o.Name,
+	}
+	for _, kv := range merged.list() {
+		lines = append(lines, kv.Key+"="+kv.Value)
+	}
+	lines = append(lines, "# 首次启动管理密码（仅首启生效，留空则自动生成）")
+	lines = append(lines, "# WEBUI_PASSWORD=")
+	lines = append(lines, "# 内核下载镜像前缀（可选）")
+	lines = append(lines, "# WEBCLASH_KERNEL_MIRROR=")
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// RenderOpenRcConf ports renderOpenRcConf byte-for-byte.
+func RenderOpenRcConf(o ServiceOptions, existing []EnvKV) string {
+	merged := newOrderedEnv(existing)
+	merged.set("WEBCLASH_BIN", o.Bin)
+	merged.set("WEBCLASH_DATA_DIR", o.DataDir)
+	merged.set("WEBCLASH_USER", o.User)
+	merged.set("WEBCLASH_PORT", strconv.Itoa(o.Port))
+	merged.set("WEBCLASH_HOST", o.Host)
+	merged.set("WEBCLASH_LOG", LogPath(o))
+	lines := []string{"# WebClash OpenRC 配置（由 webclash install 生成，可手动编辑）"}
+	for _, kv := range merged.list() {
+		lines = append(lines, kv.Key+`="`+kv.Value+`"`)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// RenderOpenRcInit ports renderOpenRcInit byte-for-byte. Shell ${...} references
+// stay literal; only the resolved option values are interpolated.
+func RenderOpenRcInit(o ServiceOptions) string {
+	r := strings.NewReplacer(
+		"{{BIN}}", o.Bin,
+		"{{USER}}", o.User,
+		"{{DATA}}", o.DataDir,
+		"{{PORT}}", strconv.Itoa(o.Port),
+		"{{HOST}}", o.Host,
+		"{{LOG}}", LogPath(o),
+	)
+	return r.Replace(`#!/sbin/openrc-run
+# WebClash service (generated by webclash install)
+
+command="${WEBCLASH_BIN:-{{BIN}}}"
+command_args="run"
+command_background=true
+command_user="${WEBCLASH_USER:-{{USER}}}"
+pidfile="/run/${RC_SVCNAME}.pid"
+directory="${WEBCLASH_DATA_DIR:-{{DATA}}}"
+output_log="${WEBCLASH_LOG:-{{LOG}}}"
+error_log="${WEBCLASH_LOG:-{{LOG}}}"
+
+export DATA_DIR="${WEBCLASH_DATA_DIR:-{{DATA}}}"
+export WEBUI_PORT="${WEBCLASH_PORT:-{{PORT}}}"
+export WEBUI_HOST="${WEBCLASH_HOST:-{{HOST}}}"
+export NODE_ENV="production"
+
+depend() {
+    use net dns logger
+    after firewall
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o "${WEBCLASH_USER:-{{USER}}}:${WEBCLASH_USER:-{{USER}}}" "${WEBCLASH_DATA_DIR:-{{DATA}}}"
+    checkpath -f -m 0640 -o "${WEBCLASH_USER:-{{USER}}}:${WEBCLASH_USER:-{{USER}}}" "${WEBCLASH_LOG:-{{LOG}}}"
+    if [ ! -e /dev/net/tun ]; then
+        ewarn "未检测到 /dev/net/tun，TUN 模式不可用"
+    fi
+}
+`)
+}

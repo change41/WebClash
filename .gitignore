@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+*.log
+.DS_Store
+._*
+.env
+!.gitkeep
+dist-go/
+!panel/internal/webui/dist/
+panel/internal/webui/dist/*
+!panel/internal/webui/dist/index.html

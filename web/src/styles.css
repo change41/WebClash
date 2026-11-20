@@ -1,0 +1,208 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #070a0f;
+  --color-ink-900: #0b1017;
+  --color-ink-850: #0f151e;
+  --color-ink-800: #131b26;
+  --color-line: #1b2430;
+  --color-line-strong: #273344;
+  --color-accent: #34d399;
+  --font-sans: "Inter", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+
+:root {
+  --chart-grid: rgb(255 255 255 / 0.06);
+  --chart-down: #34d399;
+  --chart-up: #38bdf8;
+  --dot-color: rgb(255 255 255 / 0.045);
+  --scrollbar-thumb: #26313f;
+  --scrollbar-thumb-hover: #344255;
+}
+
+/*
+ * The UI is authored against the dark palette. The light theme remaps the same
+ * tokens so existing components switch without per-page dark:/light: variants.
+ */
+html.light {
+  --color-ink-950: #f4f6f8;
+  --color-ink-900: #ffffff;
+  --color-ink-850: #f8fafc;
+  --color-ink-800: #eef2f7;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+  --color-accent: #059669;
+
+  --color-slate-100: #0b1220;
+  --color-slate-200: #0f172a;
+  --color-slate-300: #1e293b;
+  --color-slate-400: #334155;
+  --color-slate-500: #475569;
+  --color-slate-600: #64748b;
+  --color-slate-700: #cbd5e1;
+
+  --color-emerald-100: #064e3b;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-rose-100: #7f1d1d;
+  --color-rose-300: #b91c1c;
+  --color-rose-400: #dc2626;
+  --color-sky-100: #0c4a6e;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+
+  /* White is used as a light overlay on dark surfaces; flip it for light. */
+  --color-white: #0f172a;
+
+  --chart-grid: rgb(15 23 42 / 0.08);
+  --chart-down: #059669;
+  --chart-up: #0284c7;
+  --dot-color: rgb(15 23 42 / 0.06);
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-ink-950 text-slate-200 antialiased;
+    font-family: var(--font-sans);
+  }
+  ::selection {
+    @apply bg-emerald-400/25 text-emerald-100;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(52 211 153 / 0.45);
+    outline-offset: 2px;
+  }
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-ink-900/70;
+  }
+  .card-soft {
+    @apply rounded-xl border border-line/70 bg-white/[0.02];
+  }
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg
+      px-3 py-1.5 text-sm font-medium transition-colors duration-150
+      disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1 text-xs;
+  }
+  .btn-primary {
+    @apply bg-emerald-500 text-emerald-950 hover:bg-emerald-400;
+  }
+  .btn-outline {
+    @apply border border-line-strong bg-white/[0.02] text-slate-200 hover:border-slate-500 hover:bg-white/[0.06];
+  }
+  .btn-ghost {
+    @apply border border-transparent text-slate-300 hover:bg-white/[0.06] hover:text-white;
+  }
+  .btn-danger {
+    @apply border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line-strong bg-ink-950/80 px-3 py-2 text-sm text-slate-200
+      placeholder:text-slate-600 transition focus:border-emerald-500/60
+      focus:ring-2 focus:ring-emerald-500/10 focus:outline-none;
+  }
+  .input-sm {
+    @apply px-2.5 py-1 text-xs;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-slate-400;
+  }
+  .hint {
+    @apply mt-1 text-[11px] leading-relaxed text-slate-600;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium;
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .divider {
+    @apply h-px w-full bg-line;
+  }
+  .login-dots {
+    background-image: radial-gradient(circle at 1px 1px, var(--dot-color) 1px, transparent 0);
+    background-size: 26px 26px;
+  }
+}
+
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-in {
+  animation: fade-slide-in 0.18s ease-out;
+}
+
+.animate-toast {
+  animation: toast-in 0.2s ease-out;
+}
+
+.latency-good {
+  @apply text-emerald-400;
+}
+.latency-mid {
+  @apply text-amber-400;
+}
+.latency-bad {
+  @apply text-rose-400;
+}

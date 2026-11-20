@@ -1,0 +1,27 @@
+services:
+  webclash:
+    build: .
+    image: webclash:latest
+    container_name: webclash
+    restart: unless-stopped
+    ports:
+      - "7788:7788"
+      - "17890:7890"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - webclash-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:7788/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # TUN 模式需要以下配置（默认关闭 TUN，普通代理模式无需）：
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+volumes:
+  webclash-data:

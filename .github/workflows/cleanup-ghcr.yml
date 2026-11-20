@@ -1,0 +1,38 @@
+name: Cleanup GHCR dev images
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: '保留最近的 dev 版本数量'
+        required: true
+        default: 3
+        type: number
+      dry_run:
+        description: '仅预览将删除的版本，不实际删除'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cleanup-ghcr
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete old dev image versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE: ${{ github.event.repository.name }}
+          KEEP: ${{ inputs.keep || '3' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: bash scripts/cleanup-ghcr.sh

@@ -1,0 +1,23 @@
+{
+  "name": "webclash",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebClash - 基于 mihomo 内核的 Web 代理管理面板",
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "build:web": "npm run build -w web",
+    "typecheck": "npm run typecheck -w web",
+    "release:go": "docker build -f scripts/release-go.Dockerfile --output type=local,dest=dist-go .",
+    "release:go:linux": "docker build --build-arg TARGETS=linux/amd64,linux/arm64 -f scripts/release-go.Dockerfile --output type=local,dest=dist-go .",
+    "release:go:darwin": "docker build --build-arg TARGETS=darwin/amd64,darwin/arm64 -f scripts/release-go.Dockerfile --output type=local,dest=dist-go .",
+    "release:verify": "bash scripts/verify-release.sh"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
