@@ -16,6 +16,7 @@ type Settings struct {
 	Dns            DnsSettings         `json:"dns"`
 	Kernel         KernelSettings      `json:"kernel"`
 	GeoIP          GeoIPSettings       `json:"geoip"`
+	SystemProxy    SystemProxySettings `json:"systemProxy"`
 	ConnHistory    ConnHistorySettings `json:"connHistory"`
 	CustomRules    []string            `json:"customRules"`
 }
@@ -87,6 +88,13 @@ type KernelSettings struct {
 type GeoIPSettings struct {
 	Enable bool   `json:"enable"`
 	Source string `json:"source"`
+}
+
+// SystemProxySettings tracks automatic shell environment proxy configuration.
+type SystemProxySettings struct {
+	Enable     bool   `json:"enable"`
+	Shell      string `json:"shell"`
+	ConfigPath string `json:"configPath"`
 }
 
 // ConnHistorySettings controls the in-memory closed-connection retention ring.

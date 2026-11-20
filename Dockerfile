@@ -38,7 +38,8 @@ RUN set -eux; \
 ENV DATA_DIR=/data \
     WEBUI_HOST=0.0.0.0 \
     WEBUI_PORT=7788 \
-    TZ=Asia/Shanghai
+    TZ=Asia/Shanghai \
+    ENV=/root/.profile
 WORKDIR /app
 COPY --from=go /out/webclash /usr/local/bin/webclash
 RUN mkdir -p /data

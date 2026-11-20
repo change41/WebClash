@@ -31,15 +31,19 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, util.NewHttpError(400, "请求体不合法"))
 		return
 	}
-	result, err := s.core.SaveSettings(body)
+	outcome, err := s.core.SaveSettingsDetail(body)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"result":   result,
+	resp := map[string]any{
+		"result":   outcome.Result,
 		"settings": publicSettings(s.core.Settings()),
-	})
+	}
+	if outcome.SystemProxySync != nil {
+		resp["systemProxySync"] = outcome.SystemProxySync
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleControllerSecret(w http.ResponseWriter, r *http.Request) {

@@ -22,6 +22,7 @@ import (
 	"webclash/internal/geoip"
 	"webclash/internal/kernel"
 	"webclash/internal/mihomo"
+	"webclash/internal/sysproxy"
 	"webclash/internal/util"
 )
 
@@ -64,6 +65,11 @@ type Core struct {
 	initialPassword *string
 
 	persistMu sync.Mutex
+
+	// sysProxyMu serializes reads/writes to the user's shell rc file;
+	// sysProxyEnv defaults to the live OS environment and is injectable in tests.
+	sysProxyMu  sync.Mutex
+	sysProxyEnv sysproxy.Env
 
 	// dnsMu/dnsCache memoize hostname→IP resolution for GeoIP attribution of
 	// domain-only connections (nil map is created lazily on first resolve).
@@ -187,6 +193,12 @@ func (c *Core) Init() error {
 	c.mu.Unlock()
 
 	c.resolveKernelPorts()
+
+	if c.Settings().SystemProxy.Enable {
+		if _, err := c.SyncSystemProxy(); err != nil {
+			fmt.Fprintf(os.Stderr, "[webclash] 同步系统代理配置失败：%s\n", util.ErrorMessage(err))
+		}
+	}
 
 	if err := c.writeRuntimeConfig(); err != nil {
 		msg := util.ErrorMessage(err)
@@ -549,8 +561,16 @@ func (c *Core) prepareGeo(ctx context.Context) {
 	}
 }
 
-// SaveSettings merges a patch (auth excluded), persists and applies it.
+// SaveSettings merges a patch (auth/systemProxy excluded), persists and applies it.
 func (c *Core) SaveSettings(patch any) (ApplyResult, error) {
+	outcome, err := c.SaveSettingsDetail(patch)
+	return outcome.Result, err
+}
+
+// SaveSettingsDetail merges a patch (auth/systemProxy excluded), persists and
+// applies it, and proactively updates the shell proxy config when ports or
+// authentication change while system proxy is enabled.
+func (c *Core) SaveSettingsDetail(patch any) (SaveSettingsOutcome, error) {
 	clean := map[string]any{}
 	if m, ok := patch.(map[string]any); ok {
 		for k, v := range m {
@@ -558,10 +578,11 @@ func (c *Core) SaveSettings(patch any) (ApplyResult, error) {
 		}
 	}
 	delete(clean, "auth")
+	delete(clean, "systemProxy")
 
 	customRules, hasCustomRules, err := customRulesPatch(clean)
 	if err != nil {
-		return "", err
+		return SaveSettingsOutcome{}, err
 	}
 
 	c.mu.Lock()
@@ -573,7 +594,7 @@ func (c *Core) SaveSettings(patch any) (ApplyResult, error) {
 	c.mu.Unlock()
 
 	if err := config.ValidateAuthentication(next.Authentication); err != nil {
-		return "", util.NewHttpError(400, err.Error())
+		return SaveSettingsOutcome{}, util.NewHttpError(400, err.Error())
 	}
 
 	profile := c.ActiveProfile()
@@ -582,39 +603,52 @@ func (c *Core) SaveSettings(patch any) (ApplyResult, error) {
 		profileRules = profile.Settings.CustomRules
 	}
 	if err := c.validateRulePolicyRefs(next, profile, profileRules); err != nil {
-		return "", err
+		return SaveSettingsOutcome{}, err
 	}
 
 	c.mu.Lock()
+	next.SystemProxy = c.settings.SystemProxy
 	c.settings = next
 	c.mu.Unlock()
 	if err := c.persistSettings(); err != nil {
-		return "", err
+		return SaveSettingsOutcome{}, err
 	}
 	binaryChanged := before.Kernel.BinaryPath != next.Kernel.BinaryPath
 	c.applyGeoIPChange(before.GeoIP, next.GeoIP, next.Kernel.Mirror)
 
 	if err := c.writeRuntimeConfig(); err != nil {
-		return "", err
+		return SaveSettingsOutcome{}, err
+	}
+
+	var sysProxySync *SystemProxySyncResult
+	if next.SystemProxy.Enable && (!inboundUsersEqual(before.Authentication, next.Authentication) || before.Ports != next.Ports) {
+		updated, syncErr := c.SyncSystemProxy()
+		if syncErr != nil {
+			msg := util.ErrorMessage(syncErr)
+			fmt.Fprintf(os.Stderr, "[webclash] 同步系统代理配置失败：%s\n", msg)
+			sysProxySync = &SystemProxySyncResult{Updated: false, Error: &msg}
+		} else {
+			sysProxySync = &SystemProxySyncResult{Updated: updated}
+		}
 	}
 
 	if c.Kernel.State() == "running" {
 		if binaryChanged {
 			if err := c.Kernel.Restart(); err != nil {
-				return "", err
+				return SaveSettingsOutcome{}, err
 			}
-			return ResultRestarted, nil
+			return SaveSettingsOutcome{Result: ResultRestarted, SystemProxySync: sysProxySync}, nil
 		}
 		if err := c.Kernel.ReloadConfig(); err != nil {
 			fmt.Fprintf(os.Stderr, "[webclash] 热重载失败，改为重启内核：%s\n", util.ErrorMessage(err))
 			if err := c.Kernel.Restart(); err != nil {
-				return "", err
+				return SaveSettingsOutcome{}, err
 			}
-			return ResultRestarted, nil
+			return SaveSettingsOutcome{Result: ResultRestarted, SystemProxySync: sysProxySync}, nil
 		}
-		return ResultReloaded, nil
+		return SaveSettingsOutcome{Result: ResultReloaded, SystemProxySync: sysProxySync}, nil
 	}
-	return ResultSaved, nil
+	return SaveSettingsOutcome{Result: ResultSaved, SystemProxySync: sysProxySync}, nil
 }
 
 // RotateControllerSecret generates a new controller secret and applies it.

@@ -78,6 +78,11 @@ const settingsGolden = `{
     "enable": false,
     "source": "ip2region"
   },
+  "systemProxy": {
+    "enable": false,
+    "shell": "",
+    "configPath": ""
+  },
   "connHistory": {
     "limit": 3000
   },
@@ -146,6 +151,11 @@ const publicGolden = `{
   "geoip": {
     "enable": false,
     "source": "ip2region"
+  },
+  "systemProxy": {
+    "enable": false,
+    "shell": "",
+    "configPath": ""
   },
   "connHistory": {
     "limit": 3000
@@ -291,6 +301,9 @@ func TestNormalizeSettingsDefaults(t *testing.T) {
 	if n.GeoIP.Enable || n.GeoIP.Source != "ip2region" {
 		t.Errorf("geoip defaults: %+v", n.GeoIP)
 	}
+	if n.SystemProxy.Enable || n.SystemProxy.Shell != "" || n.SystemProxy.ConfigPath != "" {
+		t.Errorf("systemProxy defaults: %+v", n.SystemProxy)
+	}
 	if len(n.Dns.Nameservers) != 2 || len(n.Tun.DnsHijack) != 1 || n.Tun.DnsHijack[0] != "any:53" {
 		t.Errorf("dns/tun defaults: %+v %+v", n.Dns, n.Tun)
 	}
@@ -395,6 +408,13 @@ func TestNormalizeSettingsBoundaries(t *testing.T) {
 					t.Errorf("geoip defaults: %+v", s.GeoIP)
 				}
 			}},
+		{"systemProxy fields trimmed", map[string]any{"systemProxy": map[string]any{
+			"enable": true, "shell": " zsh ", "configPath": " /home/u/.zshrc ",
+		}}, func(t *testing.T, s Settings) {
+			if !s.SystemProxy.Enable || s.SystemProxy.Shell != "zsh" || s.SystemProxy.ConfigPath != "/home/u/.zshrc" {
+				t.Errorf("systemProxy = %+v", s.SystemProxy)
+			}
+		}},
 		{"customRules filters blanks", map[string]any{"customRules": []any{" DOMAIN,a,DIRECT ", " ", 5}},
 			func(t *testing.T, s Settings) { eqStrs(t, "customRules", s.CustomRules, []string{"DOMAIN,a,DIRECT"}) }},
 		{"customRules empty array stays empty", map[string]any{"customRules": []any{}},

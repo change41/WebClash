@@ -49,10 +49,70 @@ export interface AppSettings {
     enable: boolean;
     source: GeoIPSource;
   };
+  systemProxy: {
+    enable: boolean;
+    shell: string;
+    configPath: string;
+  };
   connHistory: {
     limit: number;
   };
   customRules: string[];
+}
+
+export interface SystemProxyShellInfo {
+  shell: string;
+  shellPath: string;
+  configPath: string;
+  fileExists: boolean;
+  inContainer: boolean;
+  loginShellOnly: boolean;
+}
+
+export interface SystemProxyExistingEntry {
+  file: string;
+  line: number;
+  content: string;
+  managed: boolean;
+}
+
+export interface SystemProxyEnvEntry {
+  name: string;
+  value: string;
+}
+
+export interface SystemProxyPreview {
+  shell: SystemProxyShellInfo;
+  httpProxy: string;
+  socksProxy: string;
+  hasAuth: boolean;
+  authUsername: string;
+  block: string;
+  maskedBlock: string;
+  existing: SystemProxyExistingEntry[];
+  envProxies: SystemProxyEnvEntry[];
+  hasExternalProxy: boolean;
+  hasEnvProxy: boolean;
+  hasManagedBlock: boolean;
+  managedBlockSynced: boolean;
+  sourceCommand: string;
+}
+
+export interface SystemProxyStatus {
+  enable: boolean;
+  synced: boolean;
+  preview: SystemProxyPreview;
+  error: string | null;
+}
+
+export interface SystemProxySyncResult {
+  updated: boolean;
+  error?: string;
+}
+
+export interface SystemProxyActionResponse {
+  status: SystemProxyStatus;
+  settings: AppSettings;
 }
 
 export interface SettingsResponse {

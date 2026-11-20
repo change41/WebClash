@@ -13,9 +13,11 @@ import {
   Save,
   ShieldAlert,
   Square,
+  Terminal,
   Trash2,
   Undo2,
 } from 'lucide-react';
+import { SystemProxyModal } from '../components/SystemProxyModal';
 import {
   Badge,
   Button,
@@ -43,6 +45,9 @@ import type {
   InboundUser,
   KernelUpdateCheck,
   SettingsResponse,
+  SystemProxyActionResponse,
+  SystemProxyStatus,
+  SystemProxySyncResult,
 } from '../types';
 
 const STAGE_LABEL: Record<string, string> = {
@@ -90,14 +95,33 @@ export function Settings() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
 
+  const [sysProxy, setSysProxy] = useState<SystemProxyStatus | null>(null);
+  const [sysProxyBusy, setSysProxyBusy] = useState(false);
+  const [sysProxyModal, setSysProxyModal] = useState<'enable' | 'inspect' | null>(null);
+  const [confirmDisableSysProxy, setConfirmDisableSysProxy] = useState(false);
+
+  const loadSystemProxy = useCallback(async () => {
+    try {
+      const result = await api<SystemProxyStatus>('/system-proxy/status');
+      setSysProxy(result);
+      return result;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api<SettingsResponse>('/settings');
+      const [result, proxyStatus] = await Promise.all([
+        api<SettingsResponse>('/settings'),
+        api<SystemProxyStatus>('/system-proxy/status').catch(() => null),
+      ]);
       setSettings(result.settings);
       setForm(structuredClone(result.settings));
       setMeta(result.config);
       setCustomMirror(isCustomMirror(result.settings.kernel.mirror));
+      if (proxyStatus) setSysProxy(proxyStatus);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -141,24 +165,121 @@ export function Settings() {
     try {
       const body: Record<string, unknown> = { ...form };
       delete body.customRules;
-      const result = await api<{ result: string; settings: AppSettings }>('/settings', {
+      delete body.systemProxy;
+      const result = await api<{
+        result: string;
+        settings: AppSettings;
+        systemProxySync?: SystemProxySyncResult;
+      }>('/settings', {
         method: 'PUT',
         body,
       });
       setSettings(structuredClone(result.settings));
       setForm(structuredClone(result.settings));
       setCustomMirror(isCustomMirror(result.settings.kernel.mirror));
-      toast.success(
+      const baseMessage =
         result.result === 'reloaded'
           ? '设置已保存，内核已热重载'
           : result.result === 'restarted'
             ? '设置已保存，内核已重启'
-            : '设置已保存（内核未运行）',
-      );
+            : '设置已保存（内核未运行）';
+      if (result.systemProxySync?.error) {
+        toast.error(`${baseMessage}，但同步系统代理失败：${result.systemProxySync.error}`);
+      } else if (result.systemProxySync?.updated) {
+        toast.success(`${baseMessage}，系统代理配置已自动更新`);
+      } else {
+        toast.success(baseMessage);
+      }
+      void loadSystemProxy();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleSystemProxy = async (next: boolean) => {
+    if (next) {
+      setSysProxyBusy(true);
+      try {
+        const fresh = await api<SystemProxyStatus>('/system-proxy/status');
+        setSysProxy(fresh);
+        setSysProxyModal('enable');
+      } catch (err) {
+        toast.error((err as Error).message);
+      } finally {
+        setSysProxyBusy(false);
+      }
+      return;
+    }
+    setConfirmDisableSysProxy(true);
+  };
+
+  const confirmEnableSystemProxy = async () => {
+    setSysProxyBusy(true);
+    try {
+      const result = await api<SystemProxyActionResponse>('/system-proxy/enable', {
+        method: 'POST',
+        body: { confirmed: true },
+      });
+      setSysProxy(result.status);
+      setSettings((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      setForm((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      setSysProxyModal(null);
+      toast.success(
+        `系统代理已写入 ${result.status.preview.shell.configPath}，新开终端或执行 source 后生效`,
+      );
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSysProxyBusy(false);
+    }
+  };
+
+  const confirmDisableSystemProxyAction = async () => {
+    setSysProxyBusy(true);
+    try {
+      const result = await api<SystemProxyActionResponse>('/system-proxy/disable', {
+        method: 'POST',
+      });
+      setSysProxy(result.status);
+      setSettings((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      setForm((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      setConfirmDisableSysProxy(false);
+      toast.success('已关闭系统代理并移除 WebClash 托管配置');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSysProxyBusy(false);
+    }
+  };
+
+  const syncSystemProxyNow = async () => {
+    setSysProxyBusy(true);
+    try {
+      const result = await api<SystemProxyActionResponse>('/system-proxy/sync', {
+        method: 'POST',
+      });
+      setSysProxy(result.status);
+      setSettings((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      setForm((cur) =>
+        cur ? { ...cur, systemProxy: result.settings.systemProxy } : result.settings,
+      );
+      toast.success('系统代理配置已同步');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSysProxyBusy(false);
     }
   };
 
@@ -328,6 +449,10 @@ export function Settings() {
   const geoDownloading = Boolean(geoStatus?.downloading);
   const geoDirty =
     form.geoip.enable !== settings.geoip.enable || form.geoip.source !== settings.geoip.source;
+  const sysProxyEnabled = Boolean(sysProxy?.enable ?? settings.systemProxy.enable);
+  const proxyConfigDirty =
+    JSON.stringify(form.ports) !== JSON.stringify(settings.ports) ||
+    JSON.stringify(form.authentication) !== JSON.stringify(settings.authentication);
 
   return (
     <div className="max-w-5xl space-y-4 pb-20">
@@ -588,17 +713,32 @@ export function Settings() {
         title="网络与端口"
         description="代理监听端口、局域网访问与运行模式"
         actions={
-          <span
-            className="flex items-center gap-1.5 text-[11px] text-slate-400"
-            title="同一网络内的其他设备可通过本机代理端口访问"
-          >
-            允许局域网连接
-            <Toggle
-              checked={form.general.allowLan}
-              onChange={(value) => update('general', { allowLan: value })}
-              label="允许局域网连接"
-            />
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className="flex items-center gap-1.5 text-[11px] text-slate-400"
+              title="根据系统 Shell 类型自动在配置文件中写入或移除代理环境变量"
+            >
+              设置系统代理
+              <Toggle
+                checked={sysProxyEnabled}
+                disabled={sysProxyBusy}
+                onChange={(value) => void handleToggleSystemProxy(value)}
+                label="设置系统代理"
+              />
+            </span>
+            <span className="h-5 w-px bg-line" />
+            <span
+              className="flex items-center gap-1.5 text-[11px] text-slate-400"
+              title="同一网络内的其他设备可通过本机代理端口访问"
+            >
+              允许局域网连接
+              <Toggle
+                checked={form.general.allowLan}
+                onChange={(value) => update('general', { allowLan: value })}
+                label="允许局域网连接"
+              />
+            </span>
+          </div>
         }
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -653,6 +793,88 @@ export function Settings() {
             </Field>
           )}
         </div>
+
+        {sysProxyEnabled && sysProxy && (
+          <div className="mt-4 space-y-2 rounded-lg border border-line bg-ink-950/50 p-3 text-[11px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-slate-300">系统代理</span>
+                <Badge tone={sysProxy.synced ? 'emerald' : 'amber'}>
+                  {sysProxy.synced ? '已同步' : '待同步'}
+                </Badge>
+                <Badge tone="sky">
+                  <Terminal className="h-3 w-3" />
+                  {sysProxy.preview.shell.shell}
+                </Badge>
+                <Badge tone={sysProxy.preview.hasAuth ? 'emerald' : 'slate'}>
+                  {sysProxy.preview.hasAuth
+                    ? `含认证：${sysProxy.preview.authUsername}`
+                    : '免认证'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {!sysProxy.synced && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={sysProxyBusy}
+                    onClick={() => void syncSystemProxyNow()}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    立即同步
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const fresh = await loadSystemProxy();
+                    if (fresh) setSysProxyModal('inspect');
+                  }}
+                >
+                  查看配置
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-line/60 pt-2">
+              <span className="shrink-0 text-slate-500">Shell 配置</span>
+              <span
+                className="mono truncate text-slate-300"
+                title={sysProxy.preview.shell.configPath}
+              >
+                {sysProxy.preview.shell.configPath}
+              </span>
+              <CopyButton value={sysProxy.preview.shell.configPath} />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2">
+              <span className="text-slate-500">
+                {sysProxy.preview.shell.loginShellOnly ? (
+                  <>
+                    登录 Shell（<code className="mono text-slate-300">sh -l</code>）生效，或执行{' '}
+                    <code className="mono text-slate-300">{sysProxy.preview.sourceCommand}</code>
+                  </>
+                ) : (
+                  <>
+                    新开终端生效，或执行{' '}
+                    <code className="mono text-slate-300">{sysProxy.preview.sourceCommand}</code>
+                  </>
+                )}
+              </span>
+              <CopyButton value={sysProxy.preview.sourceCommand} label="复制命令" />
+            </div>
+            {sysProxy.preview.shell.inContainer && (
+              <p className="text-sky-400">
+                当前运行在容器环境中，配置仅作用于容器内部，不影响宿主机。
+              </p>
+            )}
+            {sysProxy.error && <p className="text-rose-400">读取异常：{sysProxy.error}</p>}
+            {proxyConfigDirty && (
+              <p className="text-amber-300">
+                检测到端口或认证已修改，点击底部「保存并应用」后系统代理配置将自动同步更新。
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 border-t border-line pt-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1185,6 +1407,27 @@ export function Settings() {
         busy={regenerating}
         onCancel={() => setConfirmRegenerate(false)}
         onConfirm={() => void regenerateSecret()}
+      />
+
+      <SystemProxyModal
+        open={sysProxyModal !== null}
+        mode={sysProxyModal ?? 'enable'}
+        status={sysProxy}
+        hasUnsavedProxyChanges={proxyConfigDirty}
+        busy={sysProxyBusy}
+        onClose={() => setSysProxyModal(null)}
+        onConfirmEnable={() => void confirmEnableSystemProxy()}
+        onSync={() => void syncSystemProxyNow()}
+      />
+
+      <ConfirmDialog
+        open={confirmDisableSysProxy}
+        title="关闭系统代理"
+        description={`将从 ${sysProxy?.preview.shell.configPath ?? settings.systemProxy.configPath ?? 'Shell 配置文件'} 中移除 WebClash 托管的代理配置块（不会影响文件中的其他配置）。已打开的终端需新开终端或手动取消环境变量后生效。`}
+        confirmText="确认关闭并移除"
+        busy={sysProxyBusy}
+        onCancel={() => setConfirmDisableSysProxy(false)}
+        onConfirm={() => void confirmDisableSystemProxyAction()}
       />
     </div>
   );

@@ -94,6 +94,10 @@ func New(c *core.Core) *Server {
 	s.add(http.MethodPost, "/api/geoip/check", s.handleGeoIPCheck)
 	s.add(http.MethodPost, "/api/geoip/update", s.handleGeoIPUpdate)
 	s.add(http.MethodPost, "/api/geoip/lookup", s.handleGeoIPLookup)
+	s.add(http.MethodGet, "/api/system-proxy/status", s.handleSystemProxyStatus)
+	s.add(http.MethodPost, "/api/system-proxy/enable", s.handleSystemProxyEnable)
+	s.add(http.MethodPost, "/api/system-proxy/disable", s.handleSystemProxyDisable)
+	s.add(http.MethodPost, "/api/system-proxy/sync", s.handleSystemProxySync)
 	return s
 }
 

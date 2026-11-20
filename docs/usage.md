@@ -52,7 +52,8 @@
 
 ### 设置
 
-- **网络与端口**：运行模式（rule / global / direct）、混合端口、HTTP / SOCKS 端口（`0` 表示不单独监听）、日志级别、IPv6、允许局域网、绑定地址、WebUI 端口与监听地址。
+- **网络与端口**：运行模式（rule / global / direct）、混合端口、HTTP / SOCKS 端口（`0` 表示不单独监听）、日志级别、IPv6、允许局域网、设置系统代理、绑定地址、WebUI 端口与监听地址。
+- **设置系统代理**：根据当前系统 Shell 类型（支持 bash、zsh、fish、csh/tcsh、ksh、sh、nushell、elvish、pwsh）自动在对应配置文件中写入代理环境变量托管块（`http_proxy` / `https_proxy` / `all_proxy` / `no_proxy` 及大写形式）。开启前提供二次确认并展示目标文件中已有的代理配置；若已配置端口认证会自动附加认证信息，后续新增、修改、删除端口认证或调整端口并保存时也会自动同步更新。关闭时仅移除 WebClash 托管块。
 - **端口认证**：为混合端口与 HTTP / SOCKS 端口统一设置用户名 / 密码（对应 mihomo 全局 `authentication`），支持多组用户；留空表示所有端口免认证。认证对本面板生成的端口生效，订阅自带且未配置 `users` 的监听同样会继承。
 - **控制器**：mihomo external-controller 端口与密钥，支持一键重新生成密钥（会重启内核）。
 - **TUN**：开关、自动路由、自动选择网卡、协议栈（gvisor / system / mixed）、DNS 劫持地址。

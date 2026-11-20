@@ -35,6 +35,7 @@ func DefaultSettings() Settings {
 			AutoStart: true, AutoDownload: true, BinaryPath: "", Version: "latest", Mirror: "",
 		},
 		GeoIP:       GeoIPSettings{Enable: false, Source: "ip2region"},
+		SystemProxy: SystemProxySettings{Enable: false, Shell: "", ConfigPath: ""},
 		ConnHistory: ConnHistorySettings{Limit: 3000},
 		CustomRules: []string{},
 	}
@@ -77,6 +78,7 @@ func NormalizeSettings(input any) Settings {
 	dns := obj(get(src, "dns"))
 	kernel := obj(get(src, "kernel"))
 	geoip := obj(get(src, "geoip"))
+	systemProxy := obj(get(src, "systemProxy"))
 	connHistory := obj(get(src, "connHistory"))
 
 	var passwordHash *string
@@ -142,6 +144,11 @@ func NormalizeSettings(input any) Settings {
 			Enable: boolOr(get(geoip, "enable"), d.GeoIP.Enable),
 			Source: pick(get(geoip, "source"), geoipSources, d.GeoIP.Source),
 		},
+		SystemProxy: SystemProxySettings{
+			Enable:     boolOr(get(systemProxy, "enable"), d.SystemProxy.Enable),
+			Shell:      str(get(systemProxy, "shell"), ""),
+			ConfigPath: str(get(systemProxy, "configPath"), ""),
+		},
 		ConnHistory: ConnHistorySettings{
 			Limit: num(get(connHistory, "limit"), d.ConnHistory.Limit, 100, 20000),
 		},
@@ -167,6 +174,7 @@ type PublicSettings struct {
 	Dns            DnsSettings         `json:"dns"`
 	Kernel         KernelSettings      `json:"kernel"`
 	GeoIP          GeoIPSettings       `json:"geoip"`
+	SystemProxy    SystemProxySettings `json:"systemProxy"`
 	ConnHistory    ConnHistorySettings `json:"connHistory"`
 	CustomRules    []string            `json:"customRules"`
 }
@@ -184,6 +192,7 @@ func ToPublic(s Settings) PublicSettings {
 		Dns:            s.Dns,
 		Kernel:         s.Kernel,
 		GeoIP:          s.GeoIP,
+		SystemProxy:    s.SystemProxy,
 		ConnHistory:    s.ConnHistory,
 		CustomRules:    append([]string{}, s.CustomRules...),
 	}
