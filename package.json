@@ -18,6 +18,6 @@
     "release:verify": "bash scripts/verify-release.sh"
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=24"
   }
 }

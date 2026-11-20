@@ -2,7 +2,7 @@
 # binaries (CGO_ENABLED=0) for linux + darwin (amd64/arm64), package tar.xz
 # (linux) / tar.gz (darwin) + sums. Build runs natively (no QEMU for cross-compile).
 
-FROM node:22-bookworm-slim AS web
+FROM node:24-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json web/

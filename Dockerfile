@@ -2,7 +2,7 @@
 # 构建阶段固定在 BUILDPLATFORM 原生交叉编译（CGO_ENABLED=0）；多架构下仅末尾 alpine 层需要 QEMU。
 # 受限网络可用 --build-arg APT_MIRROR/APK_MIRROR/GOPROXY 替换包源。
 
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json web/

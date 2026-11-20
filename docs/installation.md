@@ -167,7 +167,7 @@ git push origin v0.1.0
 
 架构、模块职责、测试与调试的完整说明见 [开发指南](development.md)；本节只列最短上手路径。
 
-前端要求 Node.js >= 20.11；后端 Go 模块要求 Go >= 1.26（`panel/go.mod`），发行构建镜像使用 Go 1.27。
+前端要求 Node.js >= 24；后端 Go 模块要求 Go >= 1.26（`panel/go.mod`），发行构建镜像使用 Go 1.27。
 
 ```bash
 npm install
